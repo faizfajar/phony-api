@@ -12,8 +12,10 @@ type Endpoint struct {
 	Method    string     `gorm:"not null" json:"method"`     // GET, POST, dll
 	ProjectID string     `gorm:"index" json:"project_id"`    // Untuk memisahkan antar user/project
 	Responses []Response `gorm:"foreignKey:EndpointID" json:"responses"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	// Metrics provides a history of performance data for benchmarking purposes.
+	Metrics   []APIMetric `gorm:"foreignKey:EndpointID" json:"metrics"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
 }
 
 type Response struct {
