@@ -11,6 +11,7 @@ import (
 type APIMetric struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`
 	EndpointID uuid.UUID `gorm:"type:uuid;index" json:"endpoint_id"`
+	Path       string    `json:"path"`
 	DurationMS int64     `json:"duration_ms"` // Total execution time in milliseconds
 	StatusCode int       `json:"status_code"` // Response status returned to client
 	CreatedAt  time.Time `json:"created_at"`  // Timestamp for time-series analysis
