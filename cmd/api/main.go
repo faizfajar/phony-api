@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/faizfajar/phony-api/internal/config"
 	delivery "github.com/faizfajar/phony-api/internal/delivery/http"
 	"github.com/faizfajar/phony-api/internal/repository"
 	"github.com/faizfajar/phony-api/internal/service"
@@ -19,8 +20,10 @@ import (
 )
 
 func main() {
+
+	config.LoadConfig()
 	// Initialize Database connection
-	database.Connect()
+	database.Connect(config.AppConfig.DSN)
 
 	// Setup Repository
 	repo := repository.NewEndpointRepository(database.DB)
@@ -64,12 +67,18 @@ func main() {
 		}
 	})
 
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "UP", "time": time.Now().Format(time.RFC3339)})
+	})
+
 	// Core Mocking Engine Route
 	// Using /mocks/ prefix for the proxy requests
 	r.Any("/mocks/*proxypath", mockHandler.ProcessMockRequest)
 
 	// Admin Management and Benchmarking Routes
-	admin := r.Group("/admin")
+	admin := r.Group("/admin", gin.BasicAuth(gin.Accounts{
+		config.AppConfig.AdminUser: config.AppConfig.AdminPassword,
+	}))
 	{
 		// Endpoint Management
 		admin.POST("/endpoints", adminHandler.CreateEndpoint)
