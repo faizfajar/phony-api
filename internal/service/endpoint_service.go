@@ -2,6 +2,8 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/faizfajar/phony-api/internal/model"
@@ -19,19 +21,24 @@ func NewEndpointService(endpointRepository repository.EndpointRepository) *Endpo
 
 // CreateEndpoint handles the business logic for initializing a new mock configuration.
 // It assigns a unique identifier and persists the endpoint along with its response scenarios.
-func (service *EndpointService) CreateEndpoint(path string, method string, responses []model.Response) (*model.Endpoint, error) {
+func (s *EndpointService) CreateEndpoint(path string, method string, responses []model.Response) (*model.Endpoint, error) {
+	newID := uuid.New()
+
+	// Tambahkan log ini buat mastiin ID-nya beneran ganti tiap kali klik Send
+	fmt.Printf("[DEBUG] Creating new endpoint with ID: %s\n", newID.String())
+
 	newEndpoint := &model.Endpoint{
-		ID:        uuid.New(),
+		ID:        newID,
 		Path:      path,
 		Method:    method,
 		Responses: responses,
 	}
 
-	// Persisting the complete object graph to the database through the repository.
-	error := service.endpointRepository.CreateEndpoint(newEndpoint)
-	if error != nil {
-		return nil, error
+	err := s.endpointRepository.CreateEndpoint(newEndpoint)
+	if err != nil {
+		return nil, err
 	}
+
 	return newEndpoint, nil
 }
 
@@ -60,7 +67,7 @@ func (service *EndpointService) ExecuteMockMatching(path string, method string, 
 		var triggerMap map[string]string
 		unmarshalError := json.Unmarshal([]byte(responseScenario.TriggerParam), &triggerMap)
 		if unmarshalError != nil {
-			// If JSON is invalid (e.g. missing quotes), skip this specific scenario.
+			// If JSON is invalid (e.missing quotes), skip this specific scenario.
 			continue
 		}
 
@@ -92,4 +99,90 @@ func (service *EndpointService) applyLatencyAndReturn(response *model.Response) 
 		time.Sleep(time.Duration(response.DelayMS) * time.Millisecond)
 	}
 	return response
+}
+
+func (service *EndpointService) GetEndpointStats(id uuid.UUID) (map[string]interface{}, error) {
+
+	stats, err := service.endpointRepository.GetMetricSummary(id)
+	if err != nil {
+		return nil, err
+	}
+
+	stats["generated_at"] = time.Now()
+
+	return stats, nil
+}
+
+// GenerateK6Script produces a ready-to-run JavaScript file for k6 benchmarking
+func (s *EndpointService) GenerateK6Script(endpoint *model.Endpoint) string {
+	script := fmt.Sprintf(`
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export let options = {
+    vus: %d,
+    duration: '%ds',
+    thresholds: {
+        http_req_duration: ['p(95)<%d'], // Benchmark will fail if p95 exceeds this
+    },
+};
+
+export default function () {
+    const url = 'http://your-vps-ip:8080%s';
+    
+    // Execute request to the mock server
+    let res = http.get(url);
+    
+    check(res, {
+        'status is 200': (r) => r.status === 200,
+    });
+    
+    sleep(1);
+}`, endpoint.VUsers, endpoint.Duration, endpoint.ThresholdP95, endpoint.Path)
+
+	return script
+}
+
+// MatchComplexRequest handles matching logic for Body and Headers (Puzzle Piece #1)
+func (s *EndpointService) MatchComplexRequest(endpoint *model.Endpoint, reqHeaders map[string][]string, reqBody string) (*model.Response, error) {
+	var defaultResponse *model.Response
+
+	for _, res := range endpoint.Responses {
+		// Simpan fallback (default) jika trigger kosong
+		if res.TriggerParam == "{}" || res.TriggerParam == "" {
+			defaultResponse = &res
+			continue
+		}
+
+		// Match Headers (Jika ada kriteria di DB)
+		if res.TriggerHeader != "" && res.TriggerHeader != "{}" {
+			var expectedHeaders map[string]string
+			if err := json.Unmarshal([]byte(res.TriggerHeader), &expectedHeaders); err == nil {
+				match := true
+				for k, v := range expectedHeaders {
+					if val, ok := reqHeaders[k]; !ok || val[0] != v {
+						match = false
+						break
+					}
+				}
+				if !match {
+					continue
+				}
+			}
+		}
+
+		// Match Body (Jika ada kriteria di DB)
+		if res.TriggerBody != "" && res.TriggerBody != "{}" {
+			// Kita asumsikan matching sederhana: apakah body mengandung kata kunci tertentu
+			// Atau bisa di-unmarshal jika ingin matching JSON key-to-key
+			if !strings.Contains(reqBody, res.TriggerBody) {
+				continue
+			}
+		}
+
+		// Jika sampai sini, berarti semua kriteria cocok!
+		return &res, nil
+	}
+
+	return defaultResponse, nil
 }

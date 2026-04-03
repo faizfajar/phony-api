@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/faizfajar/phony-api/internal/delivery"
+	delivery "github.com/faizfajar/phony-api/internal/delivery/http"
 	"github.com/faizfajar/phony-api/internal/repository"
 	"github.com/faizfajar/phony-api/internal/service"
 	"github.com/faizfajar/phony-api/pkg/database"
@@ -19,37 +19,64 @@ import (
 )
 
 func main() {
-	// Inisialisasi DB
+	// Initialize Database connection
 	database.Connect()
 
-	// Setup Clean Architecture Layers (Wiring)
+	// Setup Repository
 	repo := repository.NewEndpointRepository(database.DB)
-	svc := service.NewEndpointService(repo)
-	handler := delivery.NewEndpointHandler(svc)
 
+	// Setup Services
+	// endpointSvc handles legacy stats/management
+	endpointSvc := service.NewEndpointService(repo)
+	// mockSvc handles the core mocking engine and k6 generation
 	mockSvc := service.NewMockEngineService(repo)
-	mockHandler := delivery.NewMockHandler(mockSvc)
 
-	// Setup Gin Router
-	r := gin.Default()
+	// Setup Handlers from the updated http delivery package
+	mockHandler := delivery.NewMockHandler(mockSvc)
+	adminHandler := delivery.NewAdminHandler(mockSvc)
+	endpointHandler := delivery.NewEndpointHandler(endpointSvc)
+
+	// Setup Gin Router with
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// Custom Error Middleware to handle internal Gin errors
+	r.Use(func(ctx *gin.Context) {
+		ctx.Next()
+		if len(ctx.Errors) > 0 {
+			ctx.JSON(ctx.Writer.Status(), gin.H{
+				"errors": ctx.Errors.Errors(),
+			})
+		}
+	})
+
+	// Core Mocking Engine Route
+	// Using /mocks/ prefix for the proxy requests
 	r.Any("/mocks/*proxypath", mockHandler.ProcessMockRequest)
 
+	// Admin Management and Benchmarking Routes
 	admin := r.Group("/admin")
 	{
-		admin.POST("/endpoints", handler.CreateEndpoint)
+		// Endpoint Management
+		admin.POST("/endpoints", adminHandler.CreateEndpoint)
+
+		admin.GET("/endpoints/:id/stats", endpointHandler.GetStats)
+
+		admin.GET("/endpoints/:id/k6", adminHandler.GetK6Script)
 	}
 
-	// Konfigurasi HTTP Server
+	// HTTP Server Configuration
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: r,
 	}
 
-	// Channel untuk menangkap sinyal terminasi (Ctrl+C / Kill)
+	// Channel to listen for termination signals
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Jalankan Server di Goroutine (agar tidak blocking)
+	// Start Server in a Goroutine to prevent blocking
 	go func() {
 		fmt.Println("[SERVER] Phony-API is starting on :8080...")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -57,11 +84,11 @@ func main() {
 		}
 	}()
 
-	// Tunggu Sinyal Berhenti
+	// Wait for Signal to stop
 	<-quit
 	fmt.Println("\n[SYSTEM] Shutdown initiated...")
 
-	// Graceful Shutdown HTTP Server (timeout 5 detik)
+	// Graceful Shutdown with 5-second timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -69,6 +96,7 @@ func main() {
 		log.Fatalf("[ERROR] Server forced to shutdown: %v", err)
 	}
 
+	// Cleanup service resources
 	mockSvc.Shutdown()
 
 	fmt.Println("[SYSTEM] Phony-API exited safely.")

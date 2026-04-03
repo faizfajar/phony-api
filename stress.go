@@ -7,9 +7,9 @@ import (
 )
 
 func main() {
-	url := "http://localhost:8080/mocks/v1/pricing?type=premium"
+	baseUrl := "http://localhost:8080/mocks/v1/pricing"
 	totalRequests := 150
-	concurrency := 10 // Mengirim 10 request secara paralel sekaligus
+	concurrency := 10
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, concurrency)
@@ -18,7 +18,16 @@ func main() {
 
 	for i := 0; i < totalRequests; i++ {
 		wg.Add(1)
-		go func(id int) {
+
+		// Logic Anomali:
+		// Request ke 145-150 akan menembak trigger "slow"
+		currentUrl := baseUrl + "?type=premium"
+		if i >= 145 {
+			currentUrl = baseUrl + "?type=slow"
+			fmt.Printf("[!] Mengirim request lambat (index %d)...\n", i)
+		}
+
+		go func(id int, url string) {
 			defer wg.Done()
 			semaphore <- struct{}{} // Limit concurrency
 
@@ -30,7 +39,7 @@ func main() {
 			}
 
 			<-semaphore
-		}(i)
+		}(i, currentUrl)
 	}
 
 	wg.Wait()

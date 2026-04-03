@@ -1,11 +1,13 @@
-package delivery
+package http
 
 import (
 	"net/http"
 
 	"github.com/faizfajar/phony-api/internal/model"
 	"github.com/faizfajar/phony-api/internal/service"
+	response "github.com/faizfajar/phony-api/pkg/app"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type EndpointHandler struct {
@@ -57,4 +59,21 @@ func (h *EndpointHandler) CreateEndpoint(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, mock)
+}
+
+func (h *EndpointHandler) GetStats(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(c, 400, "Invalid UUID format", err.Error())
+		return
+	}
+
+	stats, err := h.service.GetEndpointStats(id)
+	if err != nil {
+		response.Error(c, 500, "Failed to fetch stats", err.Error())
+		return
+	}
+
+	response.Success(c, 200, "Stats retrieved successfully", stats)
 }
