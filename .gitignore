@@ -6,6 +6,7 @@
 *.dylib
 bin/
 out/
+main
 
 # Env files
 .env
@@ -20,6 +21,9 @@ out/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# 
+postgres_data
 
 # Test coverage
 *.out
