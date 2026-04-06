@@ -9,6 +9,7 @@ import (
 type EndpointRepository interface {
 	GetAll() ([]model.Endpoint, error)
 	CreateEndpoint(endpoint *model.Endpoint) error
+	Update(id uuid.UUID, endpoint *model.Endpoint) error
 	FindAllEndpoints() ([]model.Endpoint, error)
 	FindEndpointByID(id uuid.UUID) (*model.Endpoint, error)
 	// FindEndpointByPathAndMethod is used by the mock engine to locate specific configurations.
@@ -35,6 +36,35 @@ func (repository *endpointRepository) GetAll() ([]model.Endpoint, error) {
 
 func (repository *endpointRepository) CreateEndpoint(endpoint *model.Endpoint) error {
 	return repository.database.Create(endpoint).Error
+}
+
+func (repository *endpointRepository) Update(id uuid.UUID, endpoint *model.Endpoint) error {
+	return repository.database.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("endpoint_id = ?", id).Delete(&model.Response{}).Error; err != nil {
+			return err
+		}
+
+		updateData := map[string]interface{}{
+			"path":          endpoint.Path,
+			"method":        endpoint.Method,
+			"v_users":       endpoint.VUsers,
+			"duration":      endpoint.Duration,
+			"threshold_p95": endpoint.ThresholdP95,
+		}
+
+		if err := tx.Model(&model.Endpoint{}).Where("id = ?", id).Updates(updateData).Error; err != nil {
+			return err
+		}
+
+		for i := range endpoint.Responses {
+			endpoint.Responses[i].EndpointID = id
+			if err := tx.Create(&endpoint.Responses[i]).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (repository *endpointRepository) FindAllEndpoints() ([]model.Endpoint, error) {

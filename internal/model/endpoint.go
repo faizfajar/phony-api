@@ -6,6 +6,24 @@ import (
 	"github.com/google/uuid"
 )
 
+type UpdateEndpointRequest struct {
+	Path         string            `json:"path" binding:"required"`
+	Method       string            `json:"method" binding:"required"`
+	VUsers       int               `json:"v_users"`
+	Duration     int               `json:"duration"`
+	ThresholdP95 int               `json:"threshold_p95"`
+	Responses    []ResponseRequest `json:"responses" binding:"required"`
+}
+
+type ResponseRequest struct {
+	Name           string `json:"name"`
+	TriggerParam   string `json:"trigger_param"`
+	TriggerHeader  string `json:"trigger_header"` // Mendukung matching header
+	TriggerBody    string `json:"trigger_body"`   // Mendukung matching JSON body
+	ResponseStatus int    `json:"response_status"`
+	ResponseBody   string `json:"response_body"`
+	DelayMS        int    `json:"delay_ms"`
+}
 type Endpoint struct {
 	ID           uuid.UUID   `gorm:"type:uuid;primaryKey" json:"id"`
 	Path         string      `gorm:"not null;index" json:"path"`

@@ -46,6 +46,33 @@ func (s *EndpointService) CreateEndpoint(path string, method string, responses [
 	return newEndpoint, nil
 }
 
+func (service *EndpointService) UpdateEndpoint(id uuid.UUID, input model.UpdateEndpointRequest) error {
+
+	var responses []model.Response
+	for _, r := range input.Responses {
+		responses = append(responses, model.Response{
+			Name:           r.Name,
+			TriggerParam:   r.TriggerParam,
+			TriggerHeader:  r.TriggerHeader,
+			TriggerBody:    r.TriggerBody,
+			ResponseStatus: r.ResponseStatus,
+			ResponseBody:   r.ResponseBody,
+			DelayMS:        r.DelayMS,
+		})
+	}
+
+	endpoint := &model.Endpoint{
+		Path:         input.Path,
+		Method:       input.Method,
+		VUsers:       input.VUsers,
+		Duration:     input.Duration,
+		ThresholdP95: input.ThresholdP95,
+		Responses:    responses,
+	}
+
+	return service.endpointRepository.Update(id, endpoint)
+}
+
 // FindAllEndpoints retrieves a list of all registered mock configurations.
 func (service *EndpointService) FindAllEndpoints() ([]model.Endpoint, error) {
 	return service.endpointRepository.FindAllEndpoints()

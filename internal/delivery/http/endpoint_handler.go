@@ -72,6 +72,28 @@ func (h *EndpointHandler) CreateEndpoint(c *gin.Context) {
 	c.JSON(http.StatusCreated, mock)
 }
 
+func (h *EndpointHandler) UpdateEndpoint(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		return
+	}
+
+	var input model.UpdateEndpointRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": err.Error()})
+		return
+	}
+
+	// Passing DTO ke Service
+	if err := h.service.UpdateEndpoint(id, input); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update endpoint"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Endpoint updated successfully"})
+}
+
 func (h *EndpointHandler) GetStats(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
