@@ -7,6 +7,7 @@ import (
 )
 
 type EndpointRepository interface {
+	GetAll() ([]model.Endpoint, error)
 	CreateEndpoint(endpoint *model.Endpoint) error
 	FindAllEndpoints() ([]model.Endpoint, error)
 	FindEndpointByID(id uuid.UUID) (*model.Endpoint, error)
@@ -23,6 +24,13 @@ type endpointRepository struct {
 
 func NewEndpointRepository(database *gorm.DB) EndpointRepository {
 	return &endpointRepository{database: database}
+}
+
+func (repository *endpointRepository) GetAll() ([]model.Endpoint, error) {
+	var endpoints []model.Endpoint
+	// Mengambil semua data dan sekaligus "Preload" relasi responses-nya
+	err := repository.database.Preload("Responses").Find(&endpoints).Error
+	return endpoints, err
 }
 
 func (repository *endpointRepository) CreateEndpoint(endpoint *model.Endpoint) error {

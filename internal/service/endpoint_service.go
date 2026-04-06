@@ -19,6 +19,10 @@ func NewEndpointService(endpointRepository repository.EndpointRepository) *Endpo
 	return &EndpointService{endpointRepository: endpointRepository}
 }
 
+func (s *EndpointService) GetAll() ([]model.Endpoint, error) {
+	return s.endpointRepository.GetAll() // Manggil repo untuk SELECT * FROM endpoints
+}
+
 // CreateEndpoint handles the business logic for initializing a new mock configuration.
 // It assigns a unique identifier and persists the endpoint along with its response scenarios.
 func (s *EndpointService) CreateEndpoint(path string, method string, responses []model.Response) (*model.Endpoint, error) {

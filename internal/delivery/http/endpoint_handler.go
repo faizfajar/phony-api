@@ -18,6 +18,17 @@ func NewEndpointHandler(s *service.EndpointService) *EndpointHandler {
 	return &EndpointHandler{service: s}
 }
 
+func (h *EndpointHandler) ListEndpoints(c *gin.Context) {
+	// Pastikan di service layer lo sudah ada method GetAll atau sejenisnya
+	endpoints, err := h.service.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil daftar endpoint: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, endpoints)
+}
+
 // CreateEndpoint processes incoming HTTP requests to define a new mock route.
 // It validates the input payload and transforms it into the domain model.
 func (h *EndpointHandler) CreateEndpoint(c *gin.Context) {

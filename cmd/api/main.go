@@ -80,6 +80,7 @@ func main() {
 		config.AppConfig.AdminUser: config.AppConfig.AdminPassword,
 	}))
 	{
+		admin.GET("/endpoints", endpointHandler.ListEndpoints)
 		// Endpoint Management
 		admin.POST("/endpoints", adminHandler.CreateEndpoint)
 
